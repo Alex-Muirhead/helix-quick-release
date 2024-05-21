@@ -1,12 +1,13 @@
 use crate::compositor::{Component, Compositor, Context, Event, EventResult};
 use crate::{alt, ctrl, key, shift, ui};
+use arc_swap::ArcSwap;
 use helix_core::syntax;
 use helix_view::input::KeyEvent;
 use helix_view::keyboard::KeyCode;
 use std::sync::Arc;
 use std::{borrow::Cow, ops::RangeFrom};
 use tui::buffer::Buffer as Surface;
-use tui::widgets::{Block, Borders, Widget};
+use tui::widgets::{Block, Widget};
 
 use helix_core::{
     unicode::segmentation::GraphemeCursor, unicode::width::UnicodeWidthStr, Position,
@@ -34,7 +35,7 @@ pub struct Prompt {
     callback_fn: CallbackFn,
     pub doc_fn: DocFn,
     next_char_handler: Option<PromptCharHandler>,
-    language: Option<(&'static str, Arc<syntax::Loader>)>,
+    language: Option<(&'static str, Arc<ArcSwap<syntax::Loader>>)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -98,7 +99,11 @@ impl Prompt {
         self
     }
 
-    pub fn with_language(mut self, language: &'static str, loader: Arc<syntax::Loader>) -> Self {
+    pub fn with_language(
+        mut self,
+        language: &'static str,
+        loader: Arc<ArcSwap<syntax::Loader>>,
+    ) -> Self {
         self.language = Some((language, loader));
         self
     }
@@ -393,7 +398,7 @@ impl Prompt {
             height,
         );
 
-        if !self.completion.is_empty() {
+        if completion_area.height > 0 && !self.completion.is_empty() {
             let area = completion_area;
             let background = theme.get("ui.menu");
 
@@ -452,12 +457,11 @@ impl Prompt {
             let background = theme.get("ui.help");
             surface.clear_with(area, background);
 
-            let block = Block::default()
+            let block = Block::bordered()
                 // .title(self.title.as_str())
-                .borders(Borders::ALL)
                 .border_style(background);
 
-            let inner = block.inner(area).inner(&Margin::horizontal(1));
+            let inner = block.inner(area).inner(Margin::horizontal(1));
 
             block.render(area, surface);
             text.render(inner, surface, cx);
